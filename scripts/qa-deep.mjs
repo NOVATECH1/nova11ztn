@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root=process.cwd();
+const read=(p)=>fs.readFileSync(path.join(root,p),'utf8');
+const checks=[];
+function ok(name,fn){try{fn();checks.push(`PASS ${name}`)}catch(e){checks.push(`FAIL ${name}: ${e.message}`)}}
+const schema=read('prisma/schema.prisma');
+const render=read('render.yaml');
+const order=read('app/api/store/orders/route.ts');
+const adminStore=read('app/api/admin/store/route.ts');
+const payout=read('app/api/marketplace/payout/route.ts');
+const veritas=read('app/api/payments/veritas/create/route.ts');
+const oauth=read('app/api/auth/google/callback/route.ts');
+const picker=read('app/components/subscription-picker.tsx');
+const sub=read('app/subscription/page.tsx');
+ok('Neon + B2 + Brevo config surfaces exist',()=>{for(const k of ['DATABASE_URL','B2_BUCKET','BREVO_API_KEY']) assert.match(read('.env.example'),new RegExp('^'+k+'=', 'm'))});
+ok('Admin Store mutations enforce same-origin',()=>{assert.match(adminStore,/sameOrigin\(\)/g);});
+ok('Store order locks price from DB package',()=>{assert.match(order,/price:pkg\.price/);assert.match(order,/packageId:pkg\.id/);});
+ok('Payout cannot exceed completed balance',()=>{assert.match(payout,/sellerPayout\.aggregate/);assert.match(payout,/amount > available/);});
+ok('Veritas checkout uses the database order amount',()=>{assert.match(veritas,/amount = order\.price/);});
+ok('OAuth callback validates state and creates session',()=>{assert.match(oauth,/ztn_oauth_state/);assert.match(oauth,/createSession\(user\.id\)/);});
+ok('Premium tiers are separated and 1-month plan is Popular',()=>{assert.match(sub,/id="premium"/);assert.match(sub,/id="premium-plus"/);assert.match(picker,/durationDays === 30/);});
+ok('Render secrets match code',()=>{assert.match(render,/MARKETPLACE_AUTOCOMPLETE_SECRET/);assert.match(read('app/api/marketplace/orders/auto-complete/route.ts'),/MARKETPLACE_AUTOCOMPLETE_SECRET/);});
+ok('Onboarding has no social-follow dependency',()=>{assert.doesNotMatch(read('app/api/onboarding/complete/route.ts'),/follow\.upsert|tx\.follow/);});
+console.log(checks.join('\n')); if(checks.some(x=>x.startsWith('FAIL'))) process.exit(1); console.log(`QA deep pass: ${checks.length}/${checks.length}`);

@@ -1,0 +1,375 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role { USER ADMIN }
+enum KycStatus { NOT_STARTED IN_REVIEW VERIFIED REJECTED REVOKED }
+enum StoreOrderStatus { PENDING_PAYMENT PAYMENT_SUBMITTED PAYMENT_VERIFIED PROCESSING COMPLETED CANCELLED FLAGGED REFUND_PENDING REFUND_SENT }
+enum PaymentMethod { QIBR VERITAS MANUAL_TELEBIRR MANUAL_CBE }
+enum ProductType { INSTAGRAM_FOLLOWERS INSTAGRAM_LIKES FREE_FIRE_TOPUP FREE_FIRE_LEVELUP FREE_FIRE_MEMBERSHIP DIGITAL_SERVICE }
+enum ListingType { DIGITAL SERVICE DM_SALE }
+enum ListingStatus { ACTIVE SOLD OUT UNAVAILABLE }
+enum MarketplaceOrderStatus { PENDING_PAYMENT PAID DELIVERED DISPUTED CANCELLED COMPLETED REFUNDED }
+enum ReportStatus { OPEN REVIEWED RESOLVED }
+enum SubscriptionTier { PREMIUM PREMIUM_PLUS }
+enum PayoutStatus { PENDING SENT REJECTED }
+enum PayoutMethodType { TELEBIRR CBE }
+enum KycSessionStatus { NOT_STARTED IN_REVIEW APPROVED DECLINED ABANDONED }
+
+model User {
+  id                 String @id @default(cuid())
+  email              String @unique
+  displayName        String
+  username           String @unique
+  imageUrl           String?
+  bio                String?
+  role               Role @default(USER)
+  kycStatus          KycStatus @default(NOT_STARTED)
+  isOfficial         Boolean @default(false)
+  isVerified         Boolean @default(false)
+  admin2faEnabled    Boolean @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  sessions           UserSession[]
+  accounts           OAuthAccount[]
+  storeOrders        StoreOrder[] @relation("StoreBuyer")
+  listings           Listing[] @relation("ListingSeller")
+  marketplaceOrders  MarketplaceOrder[] @relation("MarketplaceBuyer")
+  sellerOrders       MarketplaceOrder[] @relation("MarketplaceSeller")
+  subscriptions     Subscription[]
+  subscriptionPayments SubscriptionPayment[]
+  reviews           Review[] @relation("ReviewAuthor")
+  savedListings     SavedListing[]
+  recentViews       RecentView[]
+  payouts           SellerPayout[]
+  payoutMethods     PayoutMethod[]
+  kycSessions       KycSession[]
+  auditLogs         AuditLog[] @relation("AuditActor")
+  admin2faChallenges Admin2FAChallenge[]
+  discountUses      DiscountRedemption[]
+}
+
+model UserSession {
+  id         String @id @default(cuid())
+  tokenHash  String @unique
+  userId     String
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  admin2faVerifiedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model OAuthAccount {
+  id                String @id @default(cuid())
+  userId            String
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String
+  providerAccountId String
+  email             String?
+  @@unique([provider, providerAccountId])
+}
+
+model StoreCategory {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  description String?
+  imageUrl    String?
+  sortOrder   Int @default(0)
+  active      Boolean @default(true)
+  products    StoreProduct[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StoreProduct {
+  id           String @id @default(cuid())
+  categoryId   String
+  category     StoreCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  slug         String @unique
+  name         String
+  description  String?
+  imageUrl     String?
+  type         ProductType
+  fieldLabel   String?
+  active       Boolean @default(true)
+  sortOrder    Int @default(0)
+  packages     StorePackage[]
+  orders       StoreOrder[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model StorePackage {
+  id          String @id @default(cuid())
+  productId   String
+  product     StoreProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name        String
+  detail      String?
+  reward      String?
+  imageUrl    String?
+  price       Int
+  active      Boolean @default(true)
+  sortOrder   Int @default(0)
+  waliyaTopUpId   String?
+  waliyaServiceId String?
+  waliyaBasePrice Int?
+  priceSyncedAt   DateTime?
+  priceSyncError  String?
+  orders      StoreOrder[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StoreOrder {
+  id              String @id @default(cuid())
+  orderNumber     String @unique
+  userId          String
+  user            User @relation("StoreBuyer", fields: [userId], references: [id])
+  productId       String?
+  product         StoreProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  packageId       String?
+  package         StorePackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  packageName     String?
+  price           Int
+  status          StoreOrderStatus @default(PENDING_PAYMENT)
+  paymentMethod   PaymentMethod?
+  referenceNumber String?
+  paymentProofUrl String?
+  fulfillmentData Json?
+  adminNote       String?
+  paymentLinkId   String? @unique
+  deliveryProvider String? // WALIYA | MANUAL
+  supplierOrderRef String?
+  supplierStatus  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Listing {
+  id                String @id @default(cuid())
+  sellerId          String
+  seller            User @relation("ListingSeller", fields: [sellerId], references: [id])
+  title             String
+  description       String
+  category          String
+  type              ListingType
+  price             Int
+  images            Json
+  digitalStorageId  String?
+  status            ListingStatus @default(ACTIVE)
+  pinned            Boolean @default(false)
+  trendingScore     Float @default(0)
+  reportCount       Int @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  orders            MarketplaceOrder[]
+  reviews           Review[]
+  savedBy           SavedListing[]
+  recentViews       RecentView[]
+  reports           Report[]
+}
+
+model MarketplaceOrder {
+  id             String @id @default(cuid())
+  orderNumber    String @unique
+  listingId      String
+  listing        Listing @relation(fields: [listingId], references: [id])
+  buyerId        String
+  buyer          User @relation("MarketplaceBuyer", fields: [buyerId], references: [id])
+  sellerId       String
+  seller         User @relation("MarketplaceSeller", fields: [sellerId], references: [id])
+  price          Int
+  paymentLinkId  String? @unique
+  status         MarketplaceOrderStatus @default(PENDING_PAYMENT)
+  deliveredAt    DateTime?
+  completedAt    DateTime?
+  disputeReason  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  review         Review?
+}
+
+model Review {
+  id           String @id @default(cuid())
+  marketplaceOrderId String @unique
+  marketplaceOrder MarketplaceOrder @relation(fields: [marketplaceOrderId], references: [id])
+  listingId    String?
+  listing      Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  sellerId     String
+  buyerId      String
+  author       User @relation("ReviewAuthor", fields: [buyerId], references: [id])
+  stars        Int
+  comment      String?
+  createdAt    DateTime @default(now())
+}
+
+model SavedListing {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, listingId])
+}
+
+model RecentView {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  viewedAt  DateTime @default(now())
+  @@unique([userId, listingId])
+}
+
+model Report {
+  id          String @id @default(cuid())
+  listingId   String
+  listing     Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reporterId  String
+  reason      String
+  status      ReportStatus @default(OPEN)
+  createdAt   DateTime @default(now())
+}
+
+model SellerPayout {
+  id         String @id @default(cuid())
+  sellerId   String
+  seller     User @relation(fields: [sellerId], references: [id])
+  amount     Int
+  status     PayoutStatus @default(PENDING)
+  method     PayoutMethodType
+  reference  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model PayoutMethod {
+  id         String @id @default(cuid())
+  userId     String
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       PayoutMethodType
+  label      String
+  accountRef String
+  verified   Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SubscriptionPlan {
+  id          String @id @default(cuid())
+  tier        SubscriptionTier
+  durationDays Int
+  price       Int
+  active      Boolean @default(true)
+  label       String
+  subscriptions Subscription[]
+  subscriptionPayments SubscriptionPayment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([tier, durationDays])
+}
+
+model Subscription {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId      String
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id])
+  startsAt    DateTime
+  endsAt      DateTime
+  gifted      Boolean @default(false)
+  giftLabel   String?
+  paymentRef  String?
+  createdAt   DateTime @default(now())
+}
+
+model KycSession {
+  id             String @id @default(cuid())
+  userId         String
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  diditSessionId String @unique
+  vendorData     String
+  status         KycSessionStatus @default(NOT_STARTED)
+  rawEvent       Json?
+  lastEventId    String? @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Admin2FAChallenge {
+  id         String @id @default(cuid())
+  userId     String
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model StorageObject {
+  id          String @id @default(cuid())
+  provider    String
+  bucket      String
+  objectKey   String @unique
+  visibility  String
+  mimeType    String?
+  byteSize    Int?
+  ownerUserId String?
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id          String @id @default(cuid())
+  actorUserId String?
+  actor       User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
+
+model EmailDelivery {
+  id          String   @id @default(cuid())
+  eventKey    String   @unique
+  provider    String
+  recipient   String
+  subject     String
+  messageId   String?
+  status      String   @default("PENDING")
+  attempts    Int      @default(0)
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SubscriptionPayment {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId        String
+  plan          SubscriptionPlan @relation(fields: [planId], references: [id])
+  amount        Int
+  status        String   @default("PENDING")
+  transactionId String?  @unique
+  paymentLinkId String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  source    String
+  eventKey  String   @unique
+  createdAt DateTime @default(now())
+}

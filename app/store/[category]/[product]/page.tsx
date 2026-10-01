@@ -1,0 +1,9 @@
+import { SmartImage } from '@/app/components/smart-image';
+import Link from 'next/link';
+import { getStoreCatalog } from '@/lib/store';
+import { notFound } from 'next/navigation';
+export default async function ProductPage({params}:{params:Promise<{category:string;product:string}>}){
+  const {category,product}=await params; const categories:any[]=await getStoreCatalog(); const cat=categories.find((x)=>x.slug===category); const p=cat?.products?.find((x:any)=>x.slug===product); if(!cat||!p) notFound();
+  const isInstagram = p.type === 'INSTAGRAM_FOLLOWERS' || p.type === 'INSTAGRAM_LIKES';
+  return <div className="page"><div className="container"><Link className="back" href={`/store/${category}`}>← Back to {cat.name}</Link><div className="detail-layout"><div className="card detail-card"><div className="detail-image"><SmartImage src={p.imageUrl||p.image||'/media/instagram.svg'} alt={p.name} width={150} height={150}/></div><h2>{p.name}</h2><p className="muted">{p.description}</p></div>{isInstagram ? <div className="card card-pad"><p className="muted" style={{marginTop:0}}>Choose your quantity and get a price on the next step. Delivery is manual, usually within 24 hours.</p><Link className="btn btn-primary" href={`/store/order?category=${category}&product=${product}&mode=instagram`}>Continue</Link></div> : <div className="package-list">{p.packages.map((pkg:any)=><div className="package" key={pkg.id}><div className="package-main"><div className="package-name">{pkg.name}</div><div className="package-detail">{pkg.detail}{pkg.reward?` · ${pkg.reward}`:''}</div></div><div className="package-price">{pkg.price?`${pkg.price} ETB`:'Admin configured'}</div><Link className="btn btn-primary btn-small" href={`/store/order?category=${category}&product=${product}&package=${pkg.id}&packageName=${encodeURIComponent(pkg.name)}`}>Select</Link></div>)}</div>}</div></div></div>
+}

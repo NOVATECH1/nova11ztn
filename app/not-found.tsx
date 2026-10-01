@@ -1,0 +1,1 @@
+import Link from 'next/link'; export default function NotFound(){return <div className="page"><div className="container"><div className="card form-card"><div className="eyebrow">404</div><h2>Page not found</h2><p className="muted">The requested ZTN page does not exist.</p><Link className="btn btn-primary" href="/">Back home</Link></div></div></div>}

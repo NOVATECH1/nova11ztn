@@ -1,0 +1,81 @@
+services:
+  - type: web
+    name: ztn-store-marketplace
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run db:generate && npm run db:push && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        value: muhdinnovel2@gmail.com
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: DEMO_MODE
+        value: "false"
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: "false"
+      - key: MARKETPLACE_AUTOCOMPLETE_SECRET
+        sync: false
+      - key: AUTO_COMPLETE_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: DIDIT_API_KEY
+        sync: false
+      - key: DIDIT_WORKFLOW_ID
+        sync: false
+      - key: DIDIT_WEBHOOK_SECRET
+        sync: false
+      - key: DIDIT_API_URL
+        value: https://verification.didit.me
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_REGION
+        sync: false
+      - key: B2_BUCKET
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        sync: false
+      - key: BREVO_REPLY_TO
+        sync: false
+      - key: BREVO_WEBHOOK_SECRET
+        sync: false
+      - key: VERITAS_API_URL
+        value: "https://verifyapi.leulzenebe.pro"
+      - key: VERITAS_API_KEY
+        sync: false
+      - key: VERITAS_WEBHOOK_SECRET
+        sync: false
+      - key: VERITAS_PAYOUT_ACCOUNT_ID
+        sync: false
+      - key: WALIYA_PUBLIC_KEY
+        sync: false
+      - key: WALIYA_SECRET_KEY
+        sync: false
+      - key: HLGAMING_USER_UID
+        sync: false
+      - key: HLGAMING_API_KEY
+        sync: false
