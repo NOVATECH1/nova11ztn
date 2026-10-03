@@ -1,0 +1,244 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole { USER ADMIN }
+enum ProductStatus { ACTIVE SOLD SUSPENDED DELETED }
+enum OrderStatus { PENDING PAID FULFILLING COMPLETED DISPUTED CANCELLED REFUNDED EXPIRED }
+enum PaymentStatus { PENDING VERIFIED FAILED REFUNDED }
+enum KycStatus { NOT_STARTED IN_REVIEW VERIFIED REJECTED }
+enum SubscriptionTier { PREMIUM PREMIUM_PLUS }
+enum SubscriptionStatus { ACTIVE EXPIRED CANCELLED }
+enum PayoutStatus { HOLD ELIGIBLE PROCESSING PAID FAILED }
+enum StoreOrderStatus { PENDING PAID FULFILLING COMPLETED MANUAL_REVIEW FAILED CANCELLED }
+enum StoreOrderKind { FREE_FIRE INSTAGRAM_FOLLOWERS INSTAGRAM_LIKES PREMIUM PREMIUM_PLUS }
+enum BadgeTier { NONE PREMIUM PREMIUM_PLUS OFFICIAL TOP_SELLER }
+
+model User {
+  id            String       @id @default(cuid())
+  clerkId       String       @unique
+  email         String?      @unique
+  name          String?
+  imageUrl      String?
+  role          UserRole     @default(USER)
+  bio           String?
+  links         Json?
+  kycStatus     KycStatus   @default(NOT_STARTED)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sellerProfile SellerProfile?
+  products      Product[]
+  buyerOrders   Order[]      @relation("BuyerOrders")
+  subscriptions Subscription[]
+  kycRecords    KycVerification[]
+  storeOrders   StoreOrder[]
+  auditLogs     AuditLog[]
+}
+
+model SellerProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  rating          Decimal   @default(0) @db.Decimal(3,2)
+  totalSales      Int       @default(0)
+  totalListings   Int       @default(0)
+  badge           BadgeTier @default(NONE)
+  verified        Boolean   @default(false)
+  balanceDisplay  Decimal   @default(0) @db.Decimal(12,2)
+  payoutMin       Decimal   @default(100) @db.Decimal(12,2)
+  holdingHours    Int       @default(24)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products        Product[]
+  reviews         SellerReview[]
+  payouts         Payout[]
+}
+
+model Product {
+  id             String        @id @default(cuid())
+  sellerId       String
+  title          String
+  category       String
+  description    String
+  price          Decimal       @db.Decimal(12,2)
+  images         Json
+  specifications Json?
+  status         ProductStatus @default(ACTIVE)
+  featured       Boolean       @default(false)
+  level          Int?
+  uid            String?
+  region         String?
+  secretPayload  String?
+  lockedAt       DateTime?
+  lockedOrderId  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  seller         SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  orderItems     OrderItem[]
+
+  @@index([category, status])
+  @@index([sellerId, status])
+  @@index([featured, createdAt])
+}
+
+model Order {
+  id                String       @id @default(cuid())
+  buyerId           String?
+  status            OrderStatus  @default(PENDING)
+  subtotal          Decimal      @db.Decimal(12,2)
+  total             Decimal      @db.Decimal(12,2)
+  currency          String       @default("ETB")
+  isGuest           Boolean      @default(false)
+  guestReference    String?
+  checkoutToken     String       @unique @default(uuid())
+  holdUntil         DateTime?
+  completedAt       DateTime?
+  deliveredAt       DateTime?
+  problemReportedAt DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  commissionAmount  Decimal      @default(0) @db.Decimal(12,2)
+  sellerNetAmount   Decimal      @default(0) @db.Decimal(12,2)
+  buyer             User?        @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: SetNull)
+  items             OrderItem[]
+  payment           Payment?
+  payout            Payout?
+
+  @@index([buyerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  price     Decimal @db.Decimal(12,2)
+  sellerId  String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([sellerId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String?       @unique
+  storeOrderId String?      @unique
+  provider    String        @default("VERITAS")
+  status      PaymentStatus @default(PENDING)
+  amount      Decimal       @db.Decimal(12,2)
+  providerRef String?
+  paymentLink String?
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  order       Order?        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storeOrder  StoreOrder?   @relation(fields: [storeOrderId], references: [id], onDelete: Cascade)
+
+  @@index([provider, status])
+}
+
+model Payout {
+  id            String       @id @default(cuid())
+  orderId       String       @unique
+  sellerId      String
+  amount        Decimal      @db.Decimal(12,2)
+  status        PayoutStatus @default(HOLD)
+  eligibleAt    DateTime?
+  provider      String       @default("VERITAS")
+  providerRef   String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  seller        SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+
+  @@index([sellerId, status])
+}
+
+model StoreOrder {
+  id                 String           @id @default(cuid())
+  buyerId            String?
+  kind               StoreOrderKind
+  status             StoreOrderStatus @default(PENDING)
+  amount             Decimal          @db.Decimal(12,2)
+  currency           String           @default("ETB")
+  target             String
+  checkoutToken      String           @unique @default(uuid())
+  quantity           Int?
+  planDays           Int?
+  providerProductId  Int?
+  providerServiceId  Int?
+  providerRef        String?
+  providerPayload    Json?
+  paymentLinkId      String?
+  fulfillmentAt      DateTime?
+  manualFulfillment  Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  buyer              User?            @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  payment            Payment?
+
+  @@index([buyerId, createdAt])
+  @@index([status, createdAt])
+  @@index([kind, status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}
+
+model KycVerification {
+  id            String     @id @default(cuid())
+  userId        String
+  provider      String     @default("DIDIT")
+  externalId    String?
+  workflowId    String?
+  status        KycStatus  @default(IN_REVIEW)
+  decision      String?
+  rawMetadata   Json?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([externalId])
+  @@index([userId, status])
+}
+
+model Subscription {
+  id         String             @id @default(cuid())
+  userId     String
+  tier       SubscriptionTier
+  status     SubscriptionStatus @default(ACTIVE)
+  startedAt  DateTime           @default(now())
+  expiresAt  DateTime
+  price      Decimal            @db.Decimal(12,2)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model SellerReview {
+  id        String        @id @default(cuid())
+  sellerId  String
+  reviewerId String
+  rating    Int
+  comment   String?
+  createdAt DateTime      @default(now())
+  seller    SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+}

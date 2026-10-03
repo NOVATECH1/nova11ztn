@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ztn-store",
+  "main": "cloudflare-worker.mjs",
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  // Runs every hour. Replaces the old Vercel cron.
+  "triggers": { "crons": ["0 * * * *"] }
+}

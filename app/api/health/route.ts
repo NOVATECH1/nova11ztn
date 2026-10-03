@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server";
+export async function GET(){ return NextResponse.json({ ok:true, service:"ztn", time:new Date().toISOString(), integrations:{clerk:Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY),neon:Boolean(process.env.DATABASE_URL),veritas:Boolean(process.env.VERITAS_API_KEY),didit:Boolean(process.env.DIDIT_API_KEY),waliya:Boolean(process.env.WALIYA_PUBLIC_KEY&&process.env.WALIYA_SECRET_KEY),brevo:Boolean(process.env.BREVO_API_KEY),r2:Boolean(process.env.R2_ACCOUNT_ID)}}); }
